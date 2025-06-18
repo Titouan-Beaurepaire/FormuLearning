@@ -8,20 +8,20 @@ class Program
     {
         var window = new RenderWindow(new VideoMode(800, 600), "Voiture autonome 2D");
         window.Closed += (_, __) => window.Close();
-
         Color backgroundColor = new Color(128, 128, 128);
-
         var trackTexture = new Texture("track.png");
         var trackSprite = new Sprite(trackTexture)
         {
             Position = new Vector2f(0, 0),
-            Scale = new Vector2f(2f, 2f)  // Grossit le circuit x2
+            Scale = new Vector2f(4f, 4f)
         };
 
         var carTexture = new Texture("car.png");
         var voiture = new Sprite(carTexture)
         {
-            Position = new Vector2f(150, 300)  // Position de départ sur le circuit agrandi
+            Position = new Vector2f(380 * 4, 280 * 4),
+            Scale = new Vector2f(0.06f, 0.06f),
+            Rotation = 180f
         };
 
         window.SetFramerateLimit(60);
@@ -31,11 +31,8 @@ class Program
         while (window.IsOpen)
         {
             window.DispatchEvents();
-
-
             view.Center = voiture.Position + new Vector2f(voiture.GetGlobalBounds().Width / 2, voiture.GetGlobalBounds().Height / 2);
             window.SetView(view);
-
             window.Clear(backgroundColor);
             window.Draw(trackSprite);
             window.Draw(voiture);
