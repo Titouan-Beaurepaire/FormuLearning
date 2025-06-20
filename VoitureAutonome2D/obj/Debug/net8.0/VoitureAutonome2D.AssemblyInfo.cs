@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("VoitureAutonome2D")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+9538629f42d7f3edfcc87d2992dc56430a9a3e92")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+29007b203ddf7cf5b61678c010ad8c82cfcc82c4")]
 [assembly: System.Reflection.AssemblyProductAttribute("VoitureAutonome2D")]
 [assembly: System.Reflection.AssemblyTitleAttribute("VoitureAutonome2D")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]
