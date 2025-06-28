@@ -13,14 +13,6 @@ class Program
 
         Color backgroundColor = new Color(0, 255, 0);
 
-        var trackImage = new Image("track.png");
-        var trackTexture = new Texture(trackImage);
-        var trackSprite = new Sprite(trackTexture)
-        {
-            Position = new Vector2f(0, 0),
-            Scale = new Vector2f(4f, 4f)
-        };
-
         var carTexture = new Texture("car.png");
         var voiture = new Sprite(carTexture)
         {
@@ -31,8 +23,12 @@ class Program
 
         var view = new View(new FloatRect(0, 0, 800, 600));
 
-        float speed = 2.5f;
-        float rotationSpeed = 2f;
+        Vector2f velocity = new Vector2f(0f, 0f);
+        float acceleration = 0.1f;
+        float friction = 0.06f;
+        float brakePower = 0.15f;
+        float maxSpeed = 4f;
+        float rotationSpeed = 2.0f;
 
         Vector2f[] innerContour = new Vector2f[]
         {
@@ -65,6 +61,7 @@ class Program
         Vector2f[] outerContour = ComputeOuterContourProperly(innerContour, 50f);
 
         int i = 0;
+        bool hasTouchedLine = false;
 
         window.KeyPressed += (sender, e) =>
         {
@@ -74,66 +71,131 @@ class Program
                 var center = voiture.Position + new Vector2f(bounds.Width / 2, bounds.Height / 2);
                 Console.WriteLine($"📍 Position de la voiture : X = {center.X}, Y = {center.Y}");
             }
-            if (e.Code == Keyboard.Key.S)
-            {
-                Console.WriteLine($"Starting simulation");
-            }
         };
 
         while (window.IsOpen)
         {
             window.DispatchEvents();
 
-            if (Keyboard.IsKeyPressed(Keyboard.Key.Up))
+            bool accelerating = Keyboard.IsKeyPressed(Keyboard.Key.Up);
+            bool braking = Keyboard.IsKeyPressed(Keyboard.Key.Down);
+
+            float angleRad = voiture.Rotation * (float)Math.PI / 180f;
+            Vector2f forward = new Vector2f((float)Math.Cos(angleRad), (float)Math.Sin(angleRad));
+
+            if (accelerating)
             {
-                float angleRad = voiture.Rotation * (float)Math.PI / 180f;
-                var direction = new Vector2f((float)Math.Cos(angleRad), (float)Math.Sin(angleRad));
-                voiture.Position += direction * speed;
+                velocity += forward * acceleration;
             }
 
-            if (Keyboard.IsKeyPressed(Keyboard.Key.Left))
-                voiture.Rotation -= rotationSpeed;
+            if (braking)
+            {
+                if (Length(velocity) > brakePower)
+                {
+                    velocity -= Normalize(velocity) * brakePower;
+                }
+                else
+                {
+                    velocity = new Vector2f(0, 0);
+                }
+            }
 
-            if (Keyboard.IsKeyPressed(Keyboard.Key.Right))
-                voiture.Rotation += rotationSpeed;
+            float speed = Length(velocity);
+            if (speed > maxSpeed)
+            {
+                velocity = Normalize(velocity) * maxSpeed;
+            }
+
+            if (!accelerating && !braking)
+            {
+                if (speed > 0)
+                {
+                    Vector2f frictionForce = Normalize(velocity) * friction;
+                    if (Length(frictionForce) > speed)
+                        velocity = new Vector2f(0, 0);
+                    else
+                        velocity -= frictionForce;
+                }
+            }
+
+            if (speed > 0.1f)
+            {
+                if (Keyboard.IsKeyPressed(Keyboard.Key.Left))
+                    voiture.Rotation -= rotationSpeed;
+
+                if (Keyboard.IsKeyPressed(Keyboard.Key.Right))
+                    voiture.Rotation += rotationSpeed;
+            }
+
+            voiture.Position += velocity;
 
             var bounds = voiture.GetGlobalBounds();
             view.Center = voiture.Position + new Vector2f(bounds.Width / 2, bounds.Height / 2);
             window.SetView(view);
 
-            var carCenter = voiture.Position + new Vector2f(bounds.Width / 2, bounds.Height / 2);
+            Vector2f topLeft = voiture.Transform.TransformPoint(new Vector2f(0, 0));
+            Vector2f topRight = voiture.Transform.TransformPoint(new Vector2f(carTexture.Size.X, 0));
+            Vector2f bottomLeft = voiture.Transform.TransformPoint(new Vector2f(0, carTexture.Size.Y));
+            Vector2f bottomRight = voiture.Transform.TransformPoint(new Vector2f(carTexture.Size.X, carTexture.Size.Y));
+            Vector2f middleTop = voiture.Transform.TransformPoint(new Vector2f(carTexture.Size.X / 2, 0));
+            Vector2f middleBottom = voiture.Transform.TransformPoint(new Vector2f(carTexture.Size.X / 2, carTexture.Size.Y));
+            Vector2f middleLeft = voiture.Transform.TransformPoint(new Vector2f(0, carTexture.Size.Y / 2));
+            Vector2f middleRight = voiture.Transform.TransformPoint(new Vector2f(carTexture.Size.X, carTexture.Size.Y / 2));
 
-            for (int j = 0; j < innerContour.Length; j++)
+            Vector2f[] carPoints = new Vector2f[]
             {
-                Vector2f a = innerContour[j];
-                Vector2f b = innerContour[(j + 1) % innerContour.Length];
-                float d = DistancePointToSegment(carCenter, a, b);
-                if (d < 5f)
+                topLeft, topRight, bottomLeft, bottomRight,
+                middleTop, middleBottom, middleLeft, middleRight
+            };
+
+            float tolerance = 1f;
+            bool touched = false;
+
+            foreach (var point in carPoints)
+            {
+                for (int j = 0; j < innerContour.Length; j++)
                 {
-                    i++;
-                    Console.WriteLine($"🚨 Ligne franchie ! i = {i}");
-                    break;
+                    Vector2f a = innerContour[j];
+                    Vector2f b = innerContour[(j + 1) % innerContour.Length];
+                    if (DistancePointToSegment(point, a, b) <= tolerance)
+                    {
+                        touched = true;
+                        break;
+                    }
                 }
+                if (touched) break;
+
+                for (int j = 0; j < outerContour.Length; j++)
+                {
+                    Vector2f a = outerContour[j];
+                    Vector2f b = outerContour[(j + 1) % outerContour.Length];
+                    if (DistancePointToSegment(point, a, b) <= tolerance)
+                    {
+                        touched = true;
+                        break;
+                    }
+                }
+                if (touched) break;
+            }
+
+            if (touched && !hasTouchedLine)
+            {
+                i++;
+                hasTouchedLine = true;
+                Console.WriteLine($"🚨 Collision détectée ! i = {i}");
+            }
+            else if (!touched)
+            {
+                hasTouchedLine = false;
             }
 
             window.Clear(backgroundColor);
-            window.Draw(trackSprite);
 
-            // Dessiner la ligne intérieure
             for (int j = 0; j < innerContour.Length; j++)
-            {
-                var start = innerContour[j];
-                var end = innerContour[(j + 1) % innerContour.Length];
-                DrawLine(window, start, end, Color.Red);
-            }
+                DrawLine(window, innerContour[j], innerContour[(j + 1) % innerContour.Length], Color.Red);
 
-            // Dessiner la ligne extérieure
             for (int j = 0; j < outerContour.Length; j++)
-            {
-                var start = outerContour[j];
-                var end = outerContour[(j + 1) % outerContour.Length];
-                DrawLine(window, start, end, Color.Red);
-            }
+                DrawLine(window, outerContour[j], outerContour[(j + 1) % outerContour.Length], Color.Red);
 
             window.Draw(voiture);
             window.Display();
@@ -181,7 +243,7 @@ class Program
             Vector2f avgNormal = Normalize(normal1 + normal2);
 
             if (!isClockwise)
-                avgNormal *= -1; // inverser pour rester à l'extérieur
+                avgNormal *= -1;
 
             outer[i] = curr + avgNormal * offset;
         }
@@ -206,5 +268,10 @@ class Program
         float length = (float)Math.Sqrt(v.X * v.X + v.Y * v.Y);
         if (length == 0) return new Vector2f(0, 0);
         return v / length;
+    }
+
+    static float Length(Vector2f v)
+    {
+        return (float)Math.Sqrt(v.X * v.X + v.Y * v.Y);
     }
 }
