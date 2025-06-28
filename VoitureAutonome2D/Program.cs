@@ -24,7 +24,7 @@ class Program
         var carTexture = new Texture("car.png");
         var voiture = new Sprite(carTexture)
         {
-            Position = new Vector2f(380 * 4, 280 * 4),
+            Position = new Vector2f(1730, 1120),
             Scale = new Vector2f(0.05f, 0.05f),
             Rotation = 180f
         };
@@ -34,12 +34,35 @@ class Program
         float speed = 2.5f;
         float rotationSpeed = 2f;
 
-        Vector2f ligneA = new Vector2f(1823.1675f, 1092.793f);
-        Vector2f ligneB = new Vector2f(848.5702f, 1085.793f);
-        Vector2f ligneC = new Vector2f(844.4715f, 1045.8372f);
-        Vector2f ligneD = new Vector2f(749.4571f, 1070.1763f);
-        Vector2f ligneE = new Vector2f(702f, 1091f);
-        Vector2f ligneF = new Vector2f(518f, 1096f);
+        Vector2f[] innerContour = new Vector2f[]
+        {
+            new Vector2f(1823.1675f, 1092.793f),
+            new Vector2f(848.5702f, 1085.793f),
+            new Vector2f(844.4715f, 1045.8372f),
+            new Vector2f(700.4571f, 1090.1763f),
+            new Vector2f(540f, 1090f),
+            new Vector2f(481f, 1075f),
+            new Vector2f(409f, 1050f),
+            new Vector2f(335f, 985),
+            new Vector2f(275f, 860),
+            new Vector2f(210, 455),
+            new Vector2f(165, 445),
+            new Vector2f(60, 170),
+            new Vector2f(65, 125),
+            new Vector2f(350, 70),
+            new Vector2f(550, 335),
+            new Vector2f(1015, 790),
+            new Vector2f(1085, 785),
+            new Vector2f(1105, 790),
+            new Vector2f(1190, 840),
+            new Vector2f(2090, 860),
+            new Vector2f(2128, 890),
+            new Vector2f(2140, 950),
+            new Vector2f(2110, 1015),
+            new Vector2f(2060, 1040)
+        };
+
+        Vector2f[] outerContour = ComputeOuterContourProperly(innerContour, 50f);
 
         int i = 0;
 
@@ -50,6 +73,10 @@ class Program
                 var bounds = voiture.GetGlobalBounds();
                 var center = voiture.Position + new Vector2f(bounds.Width / 2, bounds.Height / 2);
                 Console.WriteLine($"📍 Position de la voiture : X = {center.X}, Y = {center.Y}");
+            }
+            if (e.Code == Keyboard.Key.S)
+            {
+                Console.WriteLine($"Starting simulation");
             }
         };
 
@@ -76,26 +103,39 @@ class Program
 
             var carCenter = voiture.Position + new Vector2f(bounds.Width / 2, bounds.Height / 2);
 
-            float d1 = DistancePointToSegment(carCenter, ligneA, ligneB);
-            float d2 = DistancePointToSegment(carCenter, ligneB, ligneC);
-            float d3 = DistancePointToSegment(carCenter, ligneC, ligneD);
-            float d4 = DistancePointToSegment(carCenter, ligneD, ligneE);
-            float d5 = DistancePointToSegment(carCenter, ligneE, ligneF);
-
-            if (d1 < 10f || d2 < 10f || d3 < 10f)
+            for (int j = 0; j < innerContour.Length; j++)
             {
-                i++;
-                Console.WriteLine($"🚨 Ligne franchie ! i = {i}");
+                Vector2f a = innerContour[j];
+                Vector2f b = innerContour[(j + 1) % innerContour.Length];
+                float d = DistancePointToSegment(carCenter, a, b);
+                if (d < 5f)
+                {
+                    i++;
+                    Console.WriteLine($"🚨 Ligne franchie ! i = {i}");
+                    break;
+                }
             }
 
             window.Clear(backgroundColor);
             window.Draw(trackSprite);
+
+            // Dessiner la ligne intérieure
+            for (int j = 0; j < innerContour.Length; j++)
+            {
+                var start = innerContour[j];
+                var end = innerContour[(j + 1) % innerContour.Length];
+                DrawLine(window, start, end, Color.Red);
+            }
+
+            // Dessiner la ligne extérieure
+            for (int j = 0; j < outerContour.Length; j++)
+            {
+                var start = outerContour[j];
+                var end = outerContour[(j + 1) % outerContour.Length];
+                DrawLine(window, start, end, Color.Red);
+            }
+
             window.Draw(voiture);
-            DrawLine(window, ligneA, ligneB, Color.Red);
-            DrawLine(window, ligneB, ligneC, Color.Red);
-            DrawLine(window, ligneC, ligneD, Color.Red);
-            DrawLine(window, ligneD, ligneE, Color.Red);
-            DrawLine(window, ligneE, ligneF, Color.Red);
             window.Display();
         }
     }
@@ -116,5 +156,55 @@ class Program
         line[0] = new Vertex(start, color);
         line[1] = new Vertex(end, color);
         window.Draw(line, PrimitiveType.Lines);
+    }
+
+    static Vector2f[] ComputeOuterContourProperly(Vector2f[] contour, float offset)
+    {
+        int n = contour.Length;
+        Vector2f[] outer = new Vector2f[n];
+
+        float winding = ComputeSignedArea(contour);
+        bool isClockwise = winding < 0;
+
+        for (int i = 0; i < n; i++)
+        {
+            Vector2f prev = contour[(i - 1 + n) % n];
+            Vector2f curr = contour[i];
+            Vector2f next = contour[(i + 1) % n];
+
+            Vector2f dir1 = Normalize(curr - prev);
+            Vector2f dir2 = Normalize(next - curr);
+
+            Vector2f normal1 = new Vector2f(-dir1.Y, dir1.X);
+            Vector2f normal2 = new Vector2f(-dir2.Y, dir2.X);
+
+            Vector2f avgNormal = Normalize(normal1 + normal2);
+
+            if (!isClockwise)
+                avgNormal *= -1; // inverser pour rester à l'extérieur
+
+            outer[i] = curr + avgNormal * offset;
+        }
+
+        return outer;
+    }
+
+    static float ComputeSignedArea(Vector2f[] points)
+    {
+        float area = 0;
+        for (int i = 0; i < points.Length; i++)
+        {
+            Vector2f p1 = points[i];
+            Vector2f p2 = points[(i + 1) % points.Length];
+            area += (p1.X * p2.Y - p2.X * p1.Y);
+        }
+        return area / 2f;
+    }
+
+    static Vector2f Normalize(Vector2f v)
+    {
+        float length = (float)Math.Sqrt(v.X * v.X + v.Y * v.Y);
+        if (length == 0) return new Vector2f(0, 0);
+        return v / length;
     }
 }
