@@ -21,6 +21,8 @@ class Program
             Rotation = 180f
         };
 
+        var startPosition = new Vector2f(1730, 1120);
+
         var view = new View(new FloatRect(0, 0, 800, 600));
 
         Vector2f velocity = new Vector2f(0f, 0f);
@@ -29,6 +31,14 @@ class Program
         float brakePower = 0.15f;
         float maxSpeed = 4f;
         float rotationSpeed = 2.0f;
+
+        Font font = new Font("arial.ttf");
+        Text attemptText = new Text("Attempt: 0", font, 20)
+        {
+            FillColor = Color.Black,
+            Position = new Vector2f(10, 10)
+        };
+        int attempt = 0;
 
         Vector2f[] innerContour = new Vector2f[]
         {
@@ -60,7 +70,6 @@ class Program
 
         Vector2f[] outerContour = ComputeOuterContourProperly(innerContour, 50f);
 
-        int i = 0;
         bool hasTouchedLine = false;
 
         window.KeyPressed += (sender, e) =>
@@ -84,45 +93,30 @@ class Program
             Vector2f forward = new Vector2f((float)Math.Cos(angleRad), (float)Math.Sin(angleRad));
 
             if (accelerating)
-            {
                 velocity += forward * acceleration;
-            }
 
             if (braking)
             {
                 if (Length(velocity) > brakePower)
-                {
                     velocity -= Normalize(velocity) * brakePower;
-                }
                 else
-                {
                     velocity = new Vector2f(0, 0);
-                }
             }
 
             float speed = Length(velocity);
             if (speed > maxSpeed)
-            {
                 velocity = Normalize(velocity) * maxSpeed;
-            }
 
-            if (!accelerating && !braking)
+            if (!accelerating && !braking && speed > 0)
             {
-                if (speed > 0)
-                {
-                    Vector2f frictionForce = Normalize(velocity) * friction;
-                    if (Length(frictionForce) > speed)
-                        velocity = new Vector2f(0, 0);
-                    else
-                        velocity -= frictionForce;
-                }
+                Vector2f frictionForce = Normalize(velocity) * friction;
+                velocity = (Length(frictionForce) > speed) ? new Vector2f(0, 0) : velocity - frictionForce;
             }
 
             if (speed > 0.1f)
             {
                 if (Keyboard.IsKeyPressed(Keyboard.Key.Left))
                     voiture.Rotation -= rotationSpeed;
-
                 if (Keyboard.IsKeyPressed(Keyboard.Key.Right))
                     voiture.Rotation += rotationSpeed;
             }
@@ -133,56 +127,57 @@ class Program
             view.Center = voiture.Position + new Vector2f(bounds.Width / 2, bounds.Height / 2);
             window.SetView(view);
 
-            Vector2f topLeft = voiture.Transform.TransformPoint(new Vector2f(0, 0));
-            Vector2f topRight = voiture.Transform.TransformPoint(new Vector2f(carTexture.Size.X, 0));
-            Vector2f bottomLeft = voiture.Transform.TransformPoint(new Vector2f(0, carTexture.Size.Y));
-            Vector2f bottomRight = voiture.Transform.TransformPoint(new Vector2f(carTexture.Size.X, carTexture.Size.Y));
-            Vector2f middleTop = voiture.Transform.TransformPoint(new Vector2f(carTexture.Size.X / 2, 0));
-            Vector2f middleBottom = voiture.Transform.TransformPoint(new Vector2f(carTexture.Size.X / 2, carTexture.Size.Y));
-            Vector2f middleLeft = voiture.Transform.TransformPoint(new Vector2f(0, carTexture.Size.Y / 2));
-            Vector2f middleRight = voiture.Transform.TransformPoint(new Vector2f(carTexture.Size.X, carTexture.Size.Y / 2));
-
             Vector2f[] carPoints = new Vector2f[]
             {
-                topLeft, topRight, bottomLeft, bottomRight,
-                middleTop, middleBottom, middleLeft, middleRight
+                voiture.Transform.TransformPoint(new Vector2f(0, 0)),
+                voiture.Transform.TransformPoint(new Vector2f(carTexture.Size.X, 0)),
+                voiture.Transform.TransformPoint(new Vector2f(0, carTexture.Size.Y)),
+                voiture.Transform.TransformPoint(new Vector2f(carTexture.Size.X, carTexture.Size.Y)),
+                voiture.Transform.TransformPoint(new Vector2f(carTexture.Size.X / 2, 0)),
+                voiture.Transform.TransformPoint(new Vector2f(carTexture.Size.X / 2, carTexture.Size.Y)),
+                voiture.Transform.TransformPoint(new Vector2f(0, carTexture.Size.Y / 2)),
+                voiture.Transform.TransformPoint(new Vector2f(carTexture.Size.X, carTexture.Size.Y / 2))
             };
 
-            float tolerance = 1f;
+            float tolerance = 0.025f;
             bool touched = false;
 
             foreach (var point in carPoints)
             {
                 for (int j = 0; j < innerContour.Length; j++)
                 {
-                    Vector2f a = innerContour[j];
-                    Vector2f b = innerContour[(j + 1) % innerContour.Length];
-                    if (DistancePointToSegment(point, a, b) <= tolerance)
+                    if (DistancePointToSegment(point, innerContour[j], innerContour[(j + 1) % innerContour.Length]) <= tolerance)
                     {
                         touched = true;
                         break;
                     }
                 }
+
                 if (touched) break;
 
                 for (int j = 0; j < outerContour.Length; j++)
                 {
-                    Vector2f a = outerContour[j];
-                    Vector2f b = outerContour[(j + 1) % outerContour.Length];
-                    if (DistancePointToSegment(point, a, b) <= tolerance)
+                    if (DistancePointToSegment(point, outerContour[j], outerContour[(j + 1) % outerContour.Length]) <= tolerance)
                     {
                         touched = true;
                         break;
                     }
                 }
+
                 if (touched) break;
             }
 
             if (touched && !hasTouchedLine)
             {
-                i++;
                 hasTouchedLine = true;
-                Console.WriteLine($"🚨 Collision détectée ! i = {i}");
+                attempt++;
+                attemptText.DisplayedString = $"Attempt: {attempt}";
+
+                voiture.Position = startPosition;
+                voiture.Rotation = 180f;
+                velocity = new Vector2f(0, 0);
+
+                Console.WriteLine($"🚨 Collision détectée ! Tentative : {attempt}");
             }
             else if (!touched)
             {
@@ -198,8 +193,12 @@ class Program
                 DrawLine(window, outerContour[j], outerContour[(j + 1) % outerContour.Length], Color.Red);
 
             DrawLine(window, new Vector2f(1514, 1156), new Vector2f(1514, 1080), Color.White);
-            DrawLine(window, new Vector2f(150, 602), new Vector2f(250, 591), Color.Blue);
-            DrawLine(window, new Vector2f(1041, 716), new Vector2f(956, 773), Color.Blue);
+            DrawLine(window, new Vector2f(241, 602), new Vector2f(201, 591), Color.Blue);
+            DrawLine(window, new Vector2f(1041, 716), new Vector2f(956, 773), Color.Green);
+
+            window.SetView(window.DefaultView);
+            window.Draw(attemptText);
+            window.SetView(view);
 
             window.Draw(voiture);
             window.Display();
@@ -228,7 +227,6 @@ class Program
     {
         int n = contour.Length;
         Vector2f[] outer = new Vector2f[n];
-
         float winding = ComputeSignedArea(contour);
         bool isClockwise = winding < 0;
 
@@ -240,10 +238,8 @@ class Program
 
             Vector2f dir1 = Normalize(curr - prev);
             Vector2f dir2 = Normalize(next - curr);
-
             Vector2f normal1 = new Vector2f(-dir1.Y, dir1.X);
             Vector2f normal2 = new Vector2f(-dir2.Y, dir2.X);
-
             Vector2f avgNormal = Normalize(normal1 + normal2);
 
             if (!isClockwise)
@@ -270,8 +266,7 @@ class Program
     static Vector2f Normalize(Vector2f v)
     {
         float length = (float)Math.Sqrt(v.X * v.X + v.Y * v.Y);
-        if (length == 0) return new Vector2f(0, 0);
-        return v / length;
+        return length == 0 ? new Vector2f(0, 0) : v / length;
     }
 
     static float Length(Vector2f v)
