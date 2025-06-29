@@ -197,6 +197,10 @@ class Program
             for (int j = 0; j < outerContour.Length; j++)
                 DrawLine(window, outerContour[j], outerContour[(j + 1) % outerContour.Length], Color.Red);
 
+            DrawLine(window, new Vector2f(1514, 1156), new Vector2f(1514, 1080), Color.White);
+            DrawLine(window, new Vector2f(150, 602), new Vector2f(250, 591), Color.Blue);
+            DrawLine(window, new Vector2f(1041, 716), new Vector2f(956, 773), Color.Blue);
+
             window.Draw(voiture);
             window.Display();
         }
